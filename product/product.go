@@ -6,9 +6,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Product struct {
+type ProductDto struct {
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Photo       string  `json:"photo"`
+	Price       float64 `json:"price"`
+}
+
+type ProductEntity struct {
 	Id          int            `json:"id"`
-	Name        pgtype.Text    `json:"name"`
+	Name        string         `json:"name"`
 	Description pgtype.Text    `json:"description"`
 	Photo       pgtype.Text    `json:"photo"`
 	Price       pgtype.Numeric `json:"price"`

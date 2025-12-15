@@ -32,39 +32,44 @@ func (p *ProductRepository) prepare(name string, sql string) (pgx.Tx, error) {
 	return tx, nil
 }
 
-func (p *ProductRepository) GetProductsById(id int) (Product, error) {
-	tx, err := p.prepare("get_product_by_id", `
+func (p *ProductRepository) FindById(id int) (*ProductEntity, error) {
+	tx, err := p.prepare("find_product_by_id", `
 	SELECT id, name, description, photo, price, created_at, updated_at 
 	FROM products 
 	WHERE id = $1 
 	ORDER BY created_at DESC`)
+	defer tx.Rollback(p.ctx)
 	if err != nil {
-		log.Fatal("failed to prepare query: ", err)
+		return nil, fmt.Errorf("failed to prepare query: %v", err)
 	}
-	rows, err := tx.Query(p.ctx, "get_product_by_id", id)
+	row := tx.QueryRow(p.ctx, "find_product_by_id", id)
+	tx.Commit(p.ctx)
+	var prod ProductEntity
+	err = row.Scan(
+		&prod.Id, &prod.Name, &prod.Description, &prod.Photo, &prod.Price, &prod.CreatedAt, &prod.UpdatedAt,
+	)
 	if err != nil {
-		log.Fatal("failed to execute query: ", err)
-	}
-	defer rows.Close()
-	// err = tx.Commit(p.ctx)
-	// if err != nil {
-	// 	log.Fatal("failed to commit transaction: ", err)
-	// }
-	var prod Product
-	if rows.Next() {
-		err = rows.Scan(
-			&prod.Id, &prod.Name, &prod.Description, &prod.Photo, &prod.Price, &prod.CreatedAt, &prod.UpdatedAt,
-		)
-		if err != nil {
-			log.Fatal("failed to read a row from query: ", err)
-		}
-	} else {
-		return prod, fmt.Errorf("product not found")
+		return nil, fmt.Errorf("cannot find product with id %d: %v", id, err)
 	}
 
-	if err := rows.Err(); err != nil {
-		log.Fatal("failed while reading rows from query: ", err)
+	return &prod, nil
+}
+
+func (p *ProductRepository) Save(prod *ProductDto) (int, error) {
+	tx, err := p.prepare("save_product", `
+		INSERT INTO products (name, description, photo, price)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("failed to prepare query: %v", err)
 	}
 
-	return prod, nil
+	var id int
+	tx.
+		QueryRow(p.ctx, "save_product", prod.Name, prod.Description, prod.Photo, prod.Price).
+		Scan(&id)
+
+	tx.Commit(p.ctx)
+	return id, nil
 }
